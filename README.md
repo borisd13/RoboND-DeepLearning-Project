@@ -1,161 +1,303 @@
 [![Udacity - Robotics NanoDegree Program](https://s3-us-west-1.amazonaws.com/udacity-robotics/Extra+Images/RoboND_flag.png)](https://www.udacity.com/robotics)
 
-## Deep Learning Project ##
+# Deep Learning Project
 
-In this project, you will train a deep neural network to identify and track a target in simulation. So-called “follow me” applications like this are key to many fields of robotics and the very same techniques you apply here could be extended to scenarios like advanced cruise control in autonomous vehicles or human-robot collaboration in industry.
+The present repository contains my solution to the [Udacity RoboND Deep Learning Project](https://github.com/udacity/RoboND-DeepLearning-Project).
 
-[image_0]: ./docs/misc/sim_screenshot.png
-![alt text][image_0] 
+For setup instructions, refer to [`ORIGINAL_README`](ORIGINAL_README.md).
 
-## Setup Instructions
-**Clone the repository**
-```
-$ git clone https://github.com/udacity/RoboND-DeepLearning.git
-```
+# Objective
 
-**Download the data**
+The objective of the project is to train a deep neural network able to identify a specific person on camera images from a drone. This person is then tracked and followed by the drone.
 
-Save the following three files into the data folder of the cloned repository. 
+The neural network is a fully convolutional network, meaning its output is an entire picture that identifies for each pixel, whether it is part of the tracked person, of another person, or of the background.
 
-[Training Data](https://s3-us-west-1.amazonaws.com/udacity-robotics/Deep+Learning+Data/Lab/train.zip) 
+# Data collection
 
-[Validation Data](https://s3-us-west-1.amazonaws.com/udacity-robotics/Deep+Learning+Data/Lab/validation.zip)
+The data is composed of images from the camera drone as well as a ground truth mask identifying the class for each pixel (tracked person, untracked person, or background).
 
-[Sample Evaluation Data](https://s3-us-west-1.amazonaws.com/udacity-robotics/Deep+Learning+Data/Project/sample_evaluation_data.zip)
+The first step to have a functioning neural network is to have good data for training. A great architecture in itself will not be functioning if the following thoughts have not been considered in data collection:
+* do I have enough data to prevent overfitting
+* does the data collected cover all possible scenarios
+* is my data well split over the different classes and environments that I want to identify
 
-**Download the QuadSim binary**
+In order to satisfy all the above mentioned conditions, more data was collected from 7 different runs, which resulted in a total of 7528 training samples.
 
-To interface your neural net with the QuadSim simulator, you must use a version QuadSim that has been custom tailored for this project. The previous version that you might have used for the Controls lab will not work.
+Here are the different scenarios that were covered:
+* Drone patrolling in different environments (trees, streets, alleys…), at different heights, with people in the background (very few pictures with tracked person as we need specific runs for it).
 
-The simulator binary can be downloaded [here](https://github.com/udacity/RoboND-DeepLearning/releases/latest)
+![alt text](imgs/data_collection_1.jpeg)
+![alt text](imgs/data_collection_2.jpeg)
+![alt text](imgs/data_collection_3.jpeg)
 
-**Install Dependencies**
+* Drone patrolling in different environments and height, with our tracked person, with or without other people, and through different angles. This is achieved by making our target zigzag within a short perimeter and have our drone patrol around it.
 
-You'll need Python 3 and Jupyter Notebooks installed to do this project.  The best way to get setup with these if you are not already is to use Anaconda following along with the [RoboND-Python-Starterkit](https://github.com/udacity/RoboND-Python-StarterKit).
+![alt text](imgs/data_collection_4.jpeg)
 
-If for some reason you choose not to use Anaconda, you must install the following frameworks and packages on your system:
-* Python 3.x
-* Tensorflow 1.2.1
-* NumPy 1.11
-* SciPy 0.17.0
-* eventlet 
-* Flask
-* h5py
-* PIL
-* python-socketio
-* scikit-image
-* transforms3d
-* PyQt4/Pyqt5
+* Drone following actively our tracked person.
 
-## Implement the Segmentation Network
-1. Download the training dataset from above and extract to the project `data` directory.
-2. Implement your solution in model_training.ipynb
-3. Train the network locally, or on [AWS](https://classroom.udacity.com/nanodegrees/nd209/parts/09664d24-bdec-4e64-897a-d0f55e177f09/modules/cac27683-d5f4-40b4-82ce-d708de8f5373/lessons/197a058e-44f6-47df-8229-0ce633e0a2d0/concepts/27c73209-5d7b-4284-8315-c0e07a7cd87f?contentVersion=1.0.0&contentLocale=en-us).
-4. Continue to experiment with the training data and network until you attain the score you desire.
-5. Once you are comfortable with performance on the training dataset, see how it performs in live simulation!
+![alt text](imgs/data_collection_5.jpeg)
+![alt text](imgs/data_collection_6.jpeg)
+![alt text](imgs/data_collection_7.jpeg)
 
-## Collecting Training Data ##
-A simple training dataset has been provided in this project's repository. This dataset will allow you to verify that your segmentation network is semi-functional. However, if your interested in improving your score,you may want to collect additional training data. To do it, please see the following steps.
+We ensured that the collected categories were split evenly to achieve a good performance in all conditions.
 
-The data directory is organized as follows:
-```
-data/runs - contains the results of prediction runs
-data/train/images - contains images for the training set
-data/train/masks - contains masked (labeled) images for the training set
-data/validation/images - contains images for the validation set
-data/validation/masks - contains masked (labeled) images for the validation set
-data/weights - contains trained TensorFlow models
+# Neural network architecture
 
-data/raw_sim_data/train/run1
-data/raw_sim_data/validation/run1
-```
+## Individual layers
 
-### Training Set ###
-1. Run QuadSim
-2. Click the `DL Training` button
-3. Set patrol points, path points, and spawn points. **TODO** add link to data collection doc
-3. With the simulator running, press "r" to begin recording.
-4. In the file selection menu navigate to the `data/raw_sim_data/train/run1` directory
-5. **optional** to speed up data collection, press "9" (1-9 will slow down collection speed)
-6. When you have finished collecting data, hit "r" to stop recording.
-7. To reset the simulator, hit "`<esc>`"
-8. To collect multiple runs create directories `data/raw_sim_data/train/run2`, `data/raw_sim_data/train/run3` and repeat the above steps.
+Most networks applied to images contain similar layers. We will describe briefly each type of layer used in proposed architecture.
 
+### Convolutions
 
-### Validation Set ###
-To collect the validation set, repeat both sets of steps above, except using the directory `data/raw_sim_data/validation` instead rather than `data/raw_sim_data/train`.
+Two types of convolutions are used in this network:
+* regular convolutions
+* separable convolutions
 
-### Image Preprocessing ###
-Before the network is trained, the images first need to be undergo a preprocessing step. The preprocessing step transforms the depth masks from the sim, into binary masks suitable for training a neural network. It also converts the images from .png to .jpeg to create a reduced sized dataset, suitable for uploading to AWS. 
-To run preprocessing:
-```
-$ python preprocess_ims.py
-```
-**Note**: If your data is stored as suggested in the steps above, this script should run without error.
+The difference between a regular convolution and a separable convolution is that the filter is applied simultaneously on all the channels in a regular convolution while it is applied separately on each channel in a separable convolution, after which a 1x1 depth convolution is applied on the channels.
 
-**Important Note 1:** 
+This difference lets the separable convolution use order of magnitude fewer parameters than an "equivalent" regular convolution while leading to similar performances. Through the use of separable convolutions, we can create deeper and larger networks.
 
-Running `preprocess_ims.py` does *not* delete files in the processed_data folder. This means if you leave images in processed data and collect a new dataset, some of the data in processed_data will be overwritten some will be left as is. It is recommended to **delete** the train and validation folders inside processed_data(or the entire folder) before running `preprocess_ims.py` with a new set of collected data.
+Each convolution layer is followed by a batch normalization, which normalizes the incoming layer and usually improves training.
 
-**Important Note 2:**
+```python
+def separable_conv2d_batchnorm(input_layer, filters, strides=1):
+    output_layer = SeparableConv2DKeras(filters=filters,kernel_size=3, strides=strides,
+                             padding='same', activation='relu')(input_layer)
+    
+    output_layer = layers.BatchNormalization()(output_layer) 
+    return output_layer
 
-The notebook, and supporting code assume your data for training/validation is in data/train, and data/validation. After you run `preprocess_ims.py` you will have new `train`, and possibly `validation` folders in the `processed_ims`.
-Rename or move `data/train`, and `data/validation`, then move `data/processed_ims/train`, into `data/`, and  `data/processed_ims/validation`also into `data/`
-
-**Important Note 3:**
-
-Merging multiple `train` or `validation` may be difficult, it is recommended that data choices be determined by what you include in `raw_sim_data/train/run1` with possibly many different runs in the directory. You can create a temporary folder in `data/` and store raw run data you don't currently want to use, but that may be useful for later. Choose which `run_x` folders to include in `raw_sim_data/train`, and `raw_sim_data/validation`, then run  `preprocess_ims.py` from within the 'code/' directory to generate your new training and validation sets. 
-
-
-## Training, Predicting and Scoring ##
-With your training and validation data having been generated or downloaded from the above section of this repository, you are free to begin working with the neural net.
-
-**Note**: Training CNNs is a very compute-intensive process. If your system does not have a recent Nvidia graphics card, with [cuDNN](https://developer.nvidia.com/cudnn) and [CUDA](https://developer.nvidia.com/cuda) installed , you may need to perform the training step in the cloud. Instructions for using AWS to train your network in the cloud may be found [here](https://classroom.udacity.com/nanodegrees/nd209/parts/09664d24-bdec-4e64-897a-d0f55e177f09/modules/cac27683-d5f4-40b4-82ce-d708de8f5373/lessons/197a058e-44f6-47df-8229-0ce633e0a2d0/concepts/27c73209-5d7b-4284-8315-c0e07a7cd87f?contentVersion=1.0.0&contentLocale=en-us)
-
-### Training your Model ###
-**Prerequisites**
-- Training data is in `data` directory
-- Validation data is in the `data` directory
-- The folders `data/train/images/`, `data/train/masks/`, `data/validation/images/`, and `data/validation/masks/` should exist and contain the appropriate data
-
-To train complete the network definition in the `model_training.ipynb` notebook and then run the training cell with appropriate hyperparameters selected.
-
-After the training run has completed, your model will be stored in the `data/weights` directory as an [HDF5](https://en.wikipedia.org/wiki/Hierarchical_Data_Format) file, and a configuration_weights file. As long as they are both in the same location, things should work. 
-
-**Important Note** the *validation* directory is used to store data that will be used during training to produce the plots of the loss, and help determine when the network is overfitting your data. 
-
-The **sample_evalution_data** directory contains data specifically designed to test the networks performance on the FollowME task. In sample_evaluation data are three directories each generated using a different sampling method. The structure of these directories is exactly the same as `validation`, and `train` datasets provided to you. For instance `patrol_with_targ` contains an `images` and `masks` subdirectory. If you would like to the evaluation code on your `validation` data a copy of the it should be moved into `sample_evaluation_data`, and then the appropriate arguments changed to the function calls in the `model_training.ipynb` notebook.
-
-The notebook has examples of how to evaulate your model once you finish training. Think about the sourcing methods, and how the information provided in the evaluation sections relates to the final score. Then try things out that seem like they may work. 
-
-## Scoring ##
-
-To score the network on the Follow Me task, two types of error are measured. First the intersection over the union for the pixelwise classifications is computed for the target channel. 
-
-In addition to this we determine whether the network detected the target person or not. If more then 3 pixels have probability greater then 0.5 of being the target person then this counts as the network guessing the target is in the image. 
-
-We determine whether the target is actually in the image by whether there are more then 3 pixels containing the target in the label mask. 
-
-Using the above the number of detection true_positives, false positives, false negatives are counted. 
-
-**How the Final score is Calculated**
-
-The final score is the pixelwise `average_IoU*(n_true_positive/(n_true_positive+n_false_positive+n_false_negative))` on data similar to that provided in sample_evaulation_data
-
-**Ideas for Improving your Score**
-
-Collect more data from the sim. Look at the predictions think about what the network is getting wrong, then collect data to counteract this. Or improve your network architecture and hyperparameters. 
-
-**Obtaining a Leaderboard Score**
-
-Share your scores in slack, and keep a tally in a pinned message. Scores should be computed on the sample_evaluation_data. This is for fun, your grade will be determined on unreleased data. If you use the sample_evaluation_data to train the network, it will result in inflated scores, and you will not be able to determine how your network will actually perform when evaluated to determine your grade.
-
-## Experimentation: Testing in Simulation
-1. Copy your saved model to the weights directory `data/weights`.
-2. Launch the simulator, select "Spawn People", and then click the "Follow Me" button.
-3. Run the realtime follower script
-```
-$ python follower.py my_amazing_model.h5
+def conv2d_batchnorm(input_layer, filters, kernel_size=3, strides=1):
+    output_layer = layers.Conv2D(filters=filters, kernel_size=kernel_size, strides=strides, 
+                      padding='same', activation='relu')(input_layer)
+    
+    output_layer = layers.BatchNormalization()(output_layer) 
+    return output_layer
 ```
 
-**Note:** If you'd like to see an overlay of the detected region on each camera frame from the drone, simply pass the `--pred_viz` parameter to `follower.py`
+### Upsampling
+
+For the architecture that we selected, our network creates smaller inputs in height/width and larger in depth. The height/width needs to eventually increase back to its initial value in order to classify each pixel. This is achieved through bilinear upsampling, which basically uses interpolation to recreate a larger image.
+
+```python
+def bilinear_upsample(input_layer):
+    output_layer = BilinearUpSampling2D((2,2))(input_layer)
+    return output_layer
+```
+
+### Encoder block
+
+An encoder block is simply made of a separable convolution as detailed previously. We use them to create deeper layers, and set the `stride` parameter to define the output size we are trying to reach.
+
+In our architecture, each encoder block usually multiplies the depth by 2 and divides height and width by 2 (by choosing a stride of 2).
+
+```python
+def encoder_block(input_layer, filters, strides):
+
+    # Create a separable convolution layer using the separable_conv2d_batchnorm() function.
+    output_layer = separable_conv2d_batchnorm(input_layer, filters, strides)
+
+    return output_layer
+```
+
+### Decoder block
+
+A decoder block creates an output opposite to the one of the encoder block. The depth decreases while height and width increase. It also uses a previous layer from the architecture through skip connections in order to have finer details.
+
+The steps that are performed are the following:
+* First, we upsample our layer by performing a bilinear interpolation.
+* Then, we concatenate our upsampled layer with an earlier layer from our architecture with the same size.
+* We finally apply two separable convolutions on the concatenation to generate new features.
+
+This process let us benefit from both the finer details from early layers and the features currently identified.
+
+```python
+def decoder_block(small_ip_layer, large_ip_layer, filters):
+
+    # Upsample the small input layer using the bilinear_upsample() function.
+    upsample = bilinear_upsample(small_ip_layer)
+
+    # Concatenate the upsampled and large input layers using layers.concatenate
+    concat = layers.concatenate([upsample, large_ip_layer])
+
+    # Add some number of separable convolution layers
+    conv_1 = separable_conv2d_batchnorm(concat, filters)
+    output_layer = separable_conv2d_batchnorm(conv_1, filters)
+
+    return output_layer
+```
+
+## Model
+
+The model has been created by using a succesion of:
+* 4 encoder blocks
+* a 1x1 convolution layer to obtain deeper features
+* 4 decoder blocks
+
+It returns an output of the same width/height as the input and with a depth of 3 to return the probability of belonging to each of the 3 classes previously defined.
+
+The number of blocks used as well as the number of filters (which starts at 16 and is doubled with each encoding block) has been refined by testing different models, considering final accuracy, speed of training, and size of network.
+
+```python
+def fcn_model(inputs, num_classes):
+    
+    # Add Encoder Blocks.
+    n = 16
+    layer_1 = encoder_block(inputs, filters=n, strides=2)
+    layer_2 = encoder_block(layer_1, filters=2*n, strides=2)
+    layer_3 = encoder_block(layer_2, filters=4*n, strides=2)
+    layer_4 = encoder_block(layer_3, filters=8*n, strides=2)
+
+    # Add 1x1 Convolution layer using conv2d_batchnorm().
+    encoded = conv2d_batchnorm(layer_4, filters=8*n, kernel_size=1, strides=1)
+
+    # Add the same number of Decoder Blocks as the number of Encoder Blocks
+    decoder_4 = decoder_block(encoded, layer_3, filters=8*n)
+    decoder_3 = decoder_block(decoder_4, layer_2, filters=4*n)
+    decoder_2 = decoder_block(decoder_3, layer_1, filters=2*n)
+    x = decoder_block(decoder_2, inputs, filters=n)
+
+    # The function returns the output layer of your model. "x" is the final layer obtained from the last decoder_block()
+    return layers.Conv2D(num_classes, 1, activation='softmax', padding='same')(x)
+```
+
+Here is an overview of the neural network architecture.
+![alt text](imgs/model.png)
+
+And here is a better outline of each layer as well as its parameters.
+
+    _________________________________________________________________
+    Layer (type)                 Output Shape              Param #   
+    =================================================================
+    input_1 (InputLayer)         (None, 160, 160, 3)       0         
+    _________________________________________________________________
+    separable_conv2d_keras_1 (Se (None, 80, 80, 16)        91        
+    _________________________________________________________________
+    batch_normalization_1 (Batch (None, 80, 80, 16)        64        
+    _________________________________________________________________
+    separable_conv2d_keras_2 (Se (None, 40, 40, 32)        688       
+    _________________________________________________________________
+    batch_normalization_2 (Batch (None, 40, 40, 32)        128       
+    _________________________________________________________________
+    separable_conv2d_keras_3 (Se (None, 20, 20, 64)        2400      
+    _________________________________________________________________
+    batch_normalization_3 (Batch (None, 20, 20, 64)        256       
+    _________________________________________________________________
+    separable_conv2d_keras_4 (Se (None, 10, 10, 128)       8896      
+    _________________________________________________________________
+    batch_normalization_4 (Batch (None, 10, 10, 128)       512       
+    _________________________________________________________________
+    conv2d_1 (Conv2D)            (None, 10, 10, 128)       16512     
+    _________________________________________________________________
+    batch_normalization_5 (Batch (None, 10, 10, 128)       512       
+    _________________________________________________________________
+    bilinear_up_sampling2d_1 (Bi (None, 20, 20, 128)       0         
+    _________________________________________________________________
+    concatenate_1 (Concatenate)  (None, 20, 20, 192)       0         
+    _________________________________________________________________
+    separable_conv2d_keras_5 (Se (None, 20, 20, 128)       26432     
+    _________________________________________________________________
+    batch_normalization_6 (Batch (None, 20, 20, 128)       512       
+    _________________________________________________________________
+    separable_conv2d_keras_6 (Se (None, 20, 20, 128)       17664     
+    _________________________________________________________________
+    batch_normalization_7 (Batch (None, 20, 20, 128)       512       
+    _________________________________________________________________
+    bilinear_up_sampling2d_2 (Bi (None, 40, 40, 128)       0         
+    _________________________________________________________________
+    concatenate_2 (Concatenate)  (None, 40, 40, 160)       0         
+    _________________________________________________________________
+    separable_conv2d_keras_7 (Se (None, 40, 40, 64)        11744     
+    _________________________________________________________________
+    batch_normalization_8 (Batch (None, 40, 40, 64)        256       
+    _________________________________________________________________
+    separable_conv2d_keras_8 (Se (None, 40, 40, 64)        4736      
+    _________________________________________________________________
+    batch_normalization_9 (Batch (None, 40, 40, 64)        256       
+    _________________________________________________________________
+    bilinear_up_sampling2d_3 (Bi (None, 80, 80, 64)        0         
+    _________________________________________________________________
+    concatenate_3 (Concatenate)  (None, 80, 80, 80)        0         
+    _________________________________________________________________
+    separable_conv2d_keras_9 (Se (None, 80, 80, 32)        3312      
+    _________________________________________________________________
+    batch_normalization_10 (Batc (None, 80, 80, 32)        128       
+    _________________________________________________________________
+    separable_conv2d_keras_10 (S (None, 80, 80, 32)        1344      
+    _________________________________________________________________
+    batch_normalization_11 (Batc (None, 80, 80, 32)        128       
+    _________________________________________________________________
+    bilinear_up_sampling2d_4 (Bi (None, 160, 160, 32)      0         
+    _________________________________________________________________
+    concatenate_4 (Concatenate)  (None, 160, 160, 35)      0         
+    _________________________________________________________________
+    separable_conv2d_keras_11 (S (None, 160, 160, 16)      891       
+    _________________________________________________________________
+    batch_normalization_12 (Batc (None, 160, 160, 16)      64        
+    _________________________________________________________________
+    separable_conv2d_keras_12 (S (None, 160, 160, 16)      416       
+    _________________________________________________________________
+    batch_normalization_13 (Batc (None, 160, 160, 16)      64        
+    _________________________________________________________________
+    conv2d_2 (Conv2D)            (None, 160, 160, 3)       51        
+    =================================================================
+    Total params: 98,569
+    Trainable params: 96,873
+    Non-trainable params: 1,696
+
+We can clearly see that the network is large with close to 100,000 parameters and is deep with several convolution layers, letting it capture complex features.
+
+## Training
+
+Several hyperparameters had to be tuned for training:
+* learning rate = 0.005. The value of 0.01 was first selected as it is common with selected optimizer (Adam). It was then decreased to 0.001 to obtain a better accuracy but the learning became then too slow so we used 0.005 which performed well.
+* batch size = 8. Here we selected the maximum value that our hardware could handle. Based on the large number of parameters, we could not use a higher batch size due to GPU limitations.
+* num epochs = 50. Usually the longer we train, the better accuracy we obtain (unless there is overfitting). We wanted the network to run for no more than 2 hours so set this value so that it would finish within this time frame.
+* training and validation steps per epoch were simply the result of the number of samples divided by the batch size.
+
+![alt text](imgs/training.jpeg)
+
+We can clearly see that the training curve decreases over time. The validation curve displays a lot of noise which is due to the fact that we had a smaller number of images (1184) and that we didn't try to optimize our data set by collecting more images.
+
+## Results
+
+The network achieved a performance of 49.3% based on Udacity metrics (refer to [`ORIGINAL_README`](ORIGINAL_README.md)).
+
+The following pictures show:
+- left: camera image
+- middle: ground truth
+- right: neural network prediction
+
+![alt text](imgs/performance_1.jpeg)
+
+![alt text](imgs/performance_2.jpeg)
+
+![alt text](imgs/performance_3.jpeg)
+
+![alt text](imgs/performance_4.jpeg)
+
+The results are impressive, with the network detecting people that are difficult to see on the image.
+
+We can however see on the last picture that the target person is present (in blue) but is identified as a regular person. Also it has some difficulty differentiating some far away objects (bushes, bridges, trees) with people.
+
+When running the `follow_me.py` script, the drone starts patrolling and uses the neural network to successfully find and track the person of interest.
+
+![alt text](imgs/simulation_1.png)
+
+![alt text](imgs/simulation_2.png)
+
+The notebook used for training of the network can be consulted at [model_training.html](model_training.html).
+
+## Potential improvements
+
+The network could be improved in several ways:
+- more data could be collected both for training and validation (which would improve visualization of validation accuracy during training of the network)
+- data augmentation could be performed adding noise to the images to reproduce limitations of cameras and prevent overfitting at the same time
+- the network could be trained longer
+- the architecture could be modified, adding either more blocks for a deeper architecture or more filters
+- more classes should be created to identify other objects (trees, buildings, animals)
+
+The current architecture can only detect 2 types of objects (tracked person and non-tracked person), the remaining class being used for the background. New masks could be created to detect any type of object (tree, cat…). However, in order to use the same neural network to detect many different objects or people, we would need to add more classes (and masks) to our final layer.
+
+It is to be noted that the network is trained on one specific person. However, if that person changed clothes, it would most likely fail as it has been trained on a single outfit. The network could also fail if the environment (place, weather, day/night) changed as it has not been trained in other conditions.

@@ -101,5 +101,8 @@ ENV/
 # mypy
 .mypy_cache/
 
+# Project specific files
 RUNS/
-
+DATA/TRAIN
+DATA/VALIDATION
+DATA/SAMPLE_EVALUATION_DATA
