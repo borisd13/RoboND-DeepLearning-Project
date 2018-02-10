@@ -12,37 +12,10 @@ The objective of the project is to train a deep neural network able to identify 
 
 The neural network is a fully convolutional network, meaning its output is an entire picture that identifies for each pixel, whether it is part of the tracked person, of another person, or of the background.
 
-# Data collection
-
-The data is composed of images from the camera drone as well as a ground truth mask identifying the class for each pixel (tracked person, untracked person, or background).
-
-The first step to have a functioning neural network is to have good data for training. A great architecture in itself will not be functioning if the following thoughts have not been considered in data collection:
-* do I have enough data to prevent overfitting
-* does the data collected cover all possible scenarios
-* is my data well split over the different classes and environments that I want to identify
-
-In order to satisfy all the above mentioned conditions, more data was collected from 7 different runs, which resulted in a total of 7528 training samples.
-
-Here are the different scenarios that were covered:
-* Drone patrolling in different environments (trees, streets, alleys…), at different heights, with people in the background (very few pictures with tracked person as we need specific runs for it).
-
-![alt text](imgs/data_collection_1.jpeg)
-![alt text](imgs/data_collection_2.jpeg)
-![alt text](imgs/data_collection_3.jpeg)
-
-* Drone patrolling in different environments and height, with our tracked person, with or without other people, and through different angles. This is achieved by making our target zigzag within a short perimeter and have our drone patrol around it.
-
-![alt text](imgs/data_collection_4.jpeg)
-
-* Drone following actively our tracked person.
-
-![alt text](imgs/data_collection_5.jpeg)
-![alt text](imgs/data_collection_6.jpeg)
-![alt text](imgs/data_collection_7.jpeg)
-
-We ensured that the collected categories were split evenly to achieve a good performance in all conditions.
-
 # Neural network architecture
+
+Here is an overview of the neural network architecture.
+![alt text](imgs/model.png)
 
 ## Individual layers
 
@@ -50,9 +23,12 @@ Most networks applied to images contain similar layers. We will describe briefly
 
 ### Convolutions
 
-Two types of convolutions are used in this network:
+Three types of convolutions are used in this network:
+* 1x1 convolution
 * regular convolutions
 * separable convolutions
+
+The 1x1 convolution applies a filter onto the depth of the image, which is why it is sometimes also called a 1x1 depth convolution. Its main purpose is to provide the same functionality of a fully connected layer (adding depth to represent more complex features) while still preserving spatial information. The output of a 1x1 convolution layer will have the same format of its input, with the depth depending on the number of filters applied. Each output pixel will have been calculated from the input pixels present at the exact same location.
 
 The difference between a regular convolution and a separable convolution is that the filter is applied simultaneously on all the channels in a regular convolution while it is applied separately on each channel in a separable convolution, after which a 1x1 depth convolution is applied on the channels.
 
@@ -130,7 +106,7 @@ def decoder_block(small_ip_layer, large_ip_layer, filters):
 
 ## Model
 
-The model has been created by using a succesion of:
+The model has been created by using a succession of:
 * 4 encoder blocks
 * a 1x1 convolution layer to obtain deeper features
 * 4 decoder blocks
@@ -138,6 +114,8 @@ The model has been created by using a succesion of:
 It returns an output of the same width/height as the input and with a depth of 3 to return the probability of belonging to each of the 3 classes previously defined.
 
 The number of blocks used as well as the number of filters (which starts at 16 and is doubled with each encoding block) has been refined by testing different models, considering final accuracy, speed of training, and size of network.
+
+While adding more blocks let us define more complex features that will be beneficial for the subject detection, it also creates more noise through downsampling/upsampling of the image. The number of blocks needs then to be defined through trial and error or using similar architectures from papers.
 
 ```python
 def fcn_model(inputs, num_classes):
@@ -162,10 +140,7 @@ def fcn_model(inputs, num_classes):
     return layers.Conv2D(num_classes, 1, activation='softmax', padding='same')(x)
 ```
 
-Here is an overview of the neural network architecture.
-![alt text](imgs/model.png)
-
-And here is a better outline of each layer as well as its parameters.
+Here is an outline of each layer with shape and parameters.
 
     _________________________________________________________________
     Layer (type)                 Output Shape              Param #   
@@ -248,7 +223,36 @@ And here is a better outline of each layer as well as its parameters.
 
 We can clearly see that the network is large with close to 100,000 parameters and is deep with several convolution layers, letting it capture complex features.
 
-## Training
+# Data collection
+
+The data is composed of images from the camera drone as well as a ground truth mask identifying the class for each pixel (tracked person, untracked person, or background).
+
+The first step to have a functioning neural network is to have good data for training. A great architecture in itself will not be functioning if the following thoughts have not been considered in data collection:
+* do I have enough data to prevent overfitting
+* does the data collected cover all possible scenarios
+* is my data well split over the different classes and environments that I want to identify
+
+In order to satisfy all the above mentioned conditions, more data was collected from 7 different runs, which resulted in a total of 7528 training samples.
+
+Here are the different scenarios that were covered:
+* Drone patrolling in different environments (trees, streets, alleys…), at different heights, with people in the background (very few pictures with tracked person as we need specific runs for it).
+
+![alt text](imgs/data_collection_1.jpeg)
+![alt text](imgs/data_collection_2.jpeg)
+![alt text](imgs/data_collection_3.jpeg)
+
+* Drone patrolling in different environments and height, with our tracked person, with or without other people, and through different angles. This is achieved by making our target zigzag within a short perimeter and have our drone patrol around it.
+
+![alt text](imgs/data_collection_4.jpeg)
+
+* Drone following actively our tracked person.
+
+![alt text](imgs/data_collection_5.jpeg)
+![alt text](imgs/data_collection_6.jpeg)
+![alt text](imgs/data_collection_7.jpeg)
+
+We ensured that the collected categories were split evenly to achieve a good performance in all conditions.
+# Training
 
 Several hyperparameters had to be tuned for training:
 * learning rate = 0.005. The value of 0.01 was first selected as it is common with selected optimizer (Adam). It was then decreased to 0.001 to obtain a better accuracy but the learning became then too slow so we used 0.005 which performed well.
@@ -260,7 +264,7 @@ Several hyperparameters had to be tuned for training:
 
 We can clearly see that the training curve decreases over time. The validation curve displays a lot of noise which is due to the fact that we had a smaller number of images (1184) and that we didn't try to optimize our data set by collecting more images.
 
-## Results
+# Results
 
 The network achieved a performance of 49.3% based on Udacity metrics (refer to [`ORIGINAL_README`](ORIGINAL_README.md)).
 
@@ -289,7 +293,7 @@ When running the `follow_me.py` script, the drone starts patrolling and uses the
 
 The notebook used for training of the network can be consulted at [model_training.html](model_training.html).
 
-## Potential improvements
+# Potential improvements and applications
 
 The network could be improved in several ways:
 - more data could be collected both for training and validation (which would improve visualization of validation accuracy during training of the network)
@@ -301,3 +305,9 @@ The network could be improved in several ways:
 The current architecture can only detect 2 types of objects (tracked person and non-tracked person), the remaining class being used for the background. New masks could be created to detect any type of object (tree, cat…). However, in order to use the same neural network to detect many different objects or people, we would need to add more classes (and masks) to our final layer.
 
 It is to be noted that the network is trained on one specific person. However, if that person changed clothes, it would most likely fail as it has been trained on a single outfit. The network could also fail if the environment (place, weather, day/night) changed as it has not been trained in other conditions.
+
+The type of architecture chosen, with encoder/decoder blocks, is typically used for:
+- semantic segmentation such as this project, for which we try to identify a class for each pixel
+- autoencoders, for which we try to reduce the number of parameters to later, reconstruct the image. The main difference here would be that we would also considerably reduce the depth since we want to reproduce the original image with as few features as possible
+- unsupervised training, for which we apply the same ideas as autoencoders to create a subset of features that we can use to define categories and classify images
+A common issue with this type of architecture is the difficulty to recreate 
